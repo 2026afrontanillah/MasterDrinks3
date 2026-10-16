@@ -1,0 +1,74 @@
+# Dependencias: se reinstalan con `npm install` en cada equipo
+node_modules/
+
+# Base de datos: SÍ va en el repositorio, a propósito.
+#
+# Lleva el montaje real de la barra -catálogo, personal, nombre y precios-, y
+# versionarla es lo que hace que instalar desde el repo en una tablet nueva la
+# deje lista para vender. Sin ella el servidor siembra datos de muestra y hay
+# que rehacer el montaje entero a mano.
+#
+# DOS AVISOS, que no son teóricos:
+#
+# 1. Un `git pull` a mitad de evento puede llevarse las ventas de la noche.
+#    Git no sabe fusionar un binario, solo reemplazarlo. Si necesitas traer un
+#    arreglo de código con el evento en marcha, copia primero pos_evento.db
+#    fuera de la carpeta y devuélvela después del pull.
+#
+# 2. Las claves del personal se guardan sin cifrar, así que viajan aquí dentro.
+#    Este repositorio tiene que seguir siendo PRIVADO.
+#
+# Para llevarla a otro equipo a mano: detén el servidor con Ctrl+C y copia
+# únicamente pos_evento.db. Al cerrarse vuelca el -wal dentro del .db y lo deja
+# completo. Copiarlo con el servidor encendido da una base a medias.
+#
+# Los -wal y -shm sí se quedan fuera: son temporales del motor, no datos.
+pos_evento.db-wal
+pos_evento.db-shm
+*.db-journal
+
+# Copias desechables que crean las herramientas de tools/ para castigarlas sin
+# miedo. Se rehacen solas en cada ejecución.
+pos_evento.stress.db*
+pos_evento.logic.db*
+pos_evento.ui.db*
+pos_evento.ident.db*
+pos_evento.pagos.db*
+pos_evento.reimp.db*
+# Bases de cada barra cuando se prueban varias instancias en el mismo equipo.
+barra_*.db*
+pos_evento.dos.db*
+
+# Configuración por equipo. PORT y MESERO_PIN_SCOPE tienen valores por defecto,
+# así que la app arranca igual sin este archivo.
+.env
+
+# Copia antigua e incompleta del proyecto que quedó anidada por error
+/masterdrinks/
+
+# Basura del sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Capturas de pantalla que genera tools/capturas.js (se rehacen solas).
+tools/capturas/
+public/_shot.html
+pos_evento.shot.db*
+pos_evento.semilla.db*
+pos_evento.cfg.db*
+
+# Informe del diagnostico de instalacion
+diagnostico-npm.txt
+
+# Copias de seguridad automáticas antes de unificar barras. Se crean una sola
+# vez por base, junto a ella, y no deben viajar al repositorio.
+respaldos/
+*.antes-de-unificar.db*
+
+# Copia previa al reinicio de ventas
+*.antes-de-reiniciar.db*
+
+# Copia desechable de la herramienta de medición
+pos_evento.medir.db*
+pos_evento.dom.db*
