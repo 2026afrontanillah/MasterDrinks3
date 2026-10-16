@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { DatabaseSync } = require('node:sqlite');
 
-const BASE = path.join(__dirname, '..', 'pos_evento.db');
-const carpetaRespaldos = path.join(__dirname, '..', 'respaldos');
+const BASE = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, '..', 'pos_evento.db');
+const carpetaRespaldos = path.join(path.dirname(BASE), 'respaldos');
 
 if (!fs.existsSync(BASE)) {
   console.error('❌ No se encontró la base de datos:', BASE);

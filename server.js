@@ -108,28 +108,44 @@ app.get('/wallpaper.png', (req, res) => {
 //      borrar la anterior ni tocar nombres.
 // Si no aparece ninguna se responde 404 y la pantalla enseña el nombre del
 // evento en el hueco del cartel.
-const AFICHE_EXT = /[.](jpe?g|png|webp)$/i;
-const AFICHE_NOMBRES = /^(afiche|cartel|evento|poster)[.](jpe?g|png|webp)$/i;
+const AFICHE_EXT = /[.](jpe?g|png|webp|avif)$/i;
+const AFICHE_NOMBRES = /^(afiche|cartel|evento|poster)[.](jpe?g|png|webp|avif)$/i;
 
 function buscarAfiche() {
-  for (const carpeta of [__dirname, path.join(__dirname, 'public')]) {
+  // 1. PRIORIDAD MÁXIMA: La carpeta 'afiche' en la raíz del proyecto.
+  // Siempre se carga el archivo que esté en esa carpeta. Si hay uno solo, se usa ese directamente.
+  const carpetaAfiche = path.join(__dirname, 'afiche');
+  try {
+    if (fs.existsSync(carpetaAfiche)) {
+      const entradas = fs.readdirSync(carpetaAfiche).filter(n => !n.startsWith('.'));
+      const archivos = entradas
+        .map(n => path.join(carpetaAfiche, n))
+        .filter(p => {
+          try { return fs.statSync(p).isFile(); } catch (e) { return false; }
+        });
+
+      if (archivos.length > 0) {
+        const imagenes = archivos.filter(p => AFICHE_EXT.test(p));
+        if (imagenes.length > 0) {
+          // Si hay una sola imagen, ésa es. Si hay varias, la más reciente.
+          imagenes.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+          return imagenes[0];
+        }
+        // Si hay un archivo sin extensión clásica, cargarlo directamente
+        archivos.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+        return archivos[0];
+      }
+    }
+  } catch (e) {
+    console.warn('Advertencia al consultar carpeta afiche:', e.message);
+  }
+
+  // 2. Fallbacks secundarios sólo si la carpeta afiche no existe o está vacía:
+  for (const carpeta of [path.join(__dirname, 'public', 'afiche'), __dirname, path.join(__dirname, 'public')]) {
     let entradas;
     try { entradas = fs.readdirSync(carpeta); } catch (e) { continue; }
     const suelto = entradas.find(n => AFICHE_NOMBRES.test(n));
     if (suelto) return path.join(carpeta, suelto);
-  }
-
-  for (const carpeta of [path.join(__dirname, 'afiche'), path.join(__dirname, 'public', 'afiche')]) {
-    let entradas;
-    try { entradas = fs.readdirSync(carpeta); } catch (e) { continue; }
-    const imagenes = entradas
-      .filter(n => AFICHE_EXT.test(n))
-      .map(n => {
-        const ruta = path.join(carpeta, n);
-        return { ruta: ruta, cuando: fs.statSync(ruta).mtimeMs };
-      })
-      .sort((a, b) => b.cuando - a.cuando);
-    if (imagenes.length) return imagenes[0].ruta;
   }
 
   return null;
@@ -198,6 +214,17 @@ app.post('/api/admin/afiche', (req, res) => {
   const rutaDestino = path.join(carpetaAfiche, nombreLimpio);
 
   try {
+    // Mantener la carpeta afiche con un único archivo activo (eliminar anteriores)
+    try {
+      const previos = fs.readdirSync(carpetaAfiche);
+      for (const p of previos) {
+        const rutaP = path.join(carpetaAfiche, p);
+        if (fs.existsSync(rutaP) && fs.statSync(rutaP).isFile() && p !== nombreLimpio) {
+          fs.unlinkSync(rutaP);
+        }
+      }
+    } catch (eLimpiar) {}
+
     fs.writeFileSync(rutaDestino, buffer);
     const ahora = Date.now();
     fs.utimesSync(rutaDestino, ahora / 1000, ahora / 1000);
