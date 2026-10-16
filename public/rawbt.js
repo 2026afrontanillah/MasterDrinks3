@@ -781,66 +781,83 @@ window.ThermalPrinter = (function () {
       ops.push(op('LOGO', { isLogo: true, align: 'center' }));
     }
 
-    const saliendo = model.tipo !== 'ENTRADA';
+    const saliendo = model.tipo !== 'ENTRADA' && model.tipo !== 'AJUSTE';
+
+    // Determinar título claro y conciso según el movimiento
+    let titulo = 'VOUCHER';
+    if (model.tipo === 'ENTRADA') {
+      titulo = (model.motivo && String(model.motivo).toUpperCase() === 'COMPRA') ? 'INGRESO (COMPRA)' : 'INGRESO DE STOCK';
+    } else if (model.tipo === 'AJUSTE') {
+      titulo = 'AJUSTE DE STOCK';
+    } else if (model.tipo === 'SALIDA') {
+      titulo = (model.motivo && String(model.motivo).toUpperCase() !== 'TRASPASO') ? 'SALIDA DE STOCK' : 'TRASPASO';
+    } else {
+      titulo = 'TRASPASO';
+    }
+
+    const idStr = model.id ? ' #' + model.id : '';
 
     ops.push(op(rule(w)));
-    ops.push(op(saliendo ? 'TRASPASO' : (model.motivo === 'COMPRA' ? 'COMPRA / ENTRADA' : 'INGRESO'),
-      { align: 'center', bold: true, tall: true, wide: true }));
+    // Título con número integrado y visible, en tipografía destacada
+    ops.push(op(titulo + idStr, { align: 'center', bold: true, tall: true }));
+
     if (copiaLabel || model.copia) {
       ops.push(op('*** ' + (copiaLabel || model.copia) + ' ***', { align: 'center', bold: true }));
     }
-    if (model.barra) ops.push(op(model.barra, { align: 'center', bold: true }));
-    ops.push(op(rule(w)));
-    ops.push(op(''));
 
-    // El número, grande: es lo que se canta por radio y lo que se apunta en la
-    // otra barra al recibir.
-    ops.push(op('N.' + model.id, { align: 'center', bold: true, tall: true, wide: true }));
-    ops.push(op(''));
-
-    // A dónde va, en grande. Es el dato que evita que la caja acabe en la barra
-    // equivocada, que es el error caro de esto.
-    ops.push(op(saliendo ? 'DESTINO' : (model.motivo === 'COMPRA' ? 'PROVEEDOR' : 'ORIGEN'),
-      { align: 'center' }));
-    wrap(model.contraparte || '-', w).forEach(l =>
-      ops.push(op(l, { align: 'center', bold: true, tall: true })));
-    ops.push(op(''));
-
-    ops.push(op(padPair(model.fecha || '', model.hora || '', w)));
-    if (model.responsable) kv(saliendo ? 'Entrega' : 'Recibe', model.responsable, w).forEach(l => ops.push(op(l)));
-
-    ops.push(op(''));
-    ops.push(op(sectionTitle(saliendo ? 'ENTREGAR' : 'RECIBIDO', w), { bold: true }));
-    ops.push(op(''));
-
-    (model.items || []).forEach((item, i) => {
-      if (i > 0) ops.push(op(''));
-      wrapIndent('[ ] ' + item.cantidad + ' x ' + item.nombre, w, 4)
-        .forEach(l => ops.push(op(l, { bold: true, tall: true })));
-    });
-
-    ops.push(op(''));
+    // Barra y fecha/hora en una sola línea compacta
+    const barra = model.barra || '';
+    const fechaHora = [model.fecha, model.hora].filter(Boolean).join(' ');
+    if (barra && fechaHora) {
+      ops.push(op(padPair(barra, fechaHora, w)));
+    } else if (barra || fechaHora) {
+      ops.push(op(barra || fechaHora, { align: 'center' }));
+    }
     ops.push(op(divider(w)));
-    const unidades = (model.items || []).reduce((n, i) => n + Number(i.cantidad || 0), 0);
-    ops.push(op(padPair(
-      (model.items || []).length + ((model.items || []).length === 1 ? ' producto' : ' productos'),
-      unidades + (unidades === 1 ? ' unidad' : ' unidades'), w)));
 
-    if (model.observaciones) {
-      ops.push(op(''));
-      ops.push(op(sectionTitle('NOTA', w), { bold: true }));
-      wrap(model.observaciones, w).forEach(l => ops.push(op(l)));
+    // Origen / Destino y Responsable en líneas compactas
+    const contraparteLabel = saliendo
+      ? 'Destino:'
+      : (model.motivo && String(model.motivo).toUpperCase() === 'COMPRA' ? 'Origen:' : 'Motivo:');
+    const contraparteVal = model.contraparte || model.motivo || '-';
+    kv(contraparteLabel, contraparteVal, w, 9).forEach(l => ops.push(op(l)));
+
+    if (model.responsable) {
+      kv(saliendo ? 'Entrega:' : 'Recibe:', model.responsable, w, 9).forEach(l => ops.push(op(l)));
     }
 
-    // Hueco de firma: la mercancía cambia de manos, y sin una firma no hay a
-    // quién preguntarle si al día siguiente falta media caja.
-    ops.push(op(''));
-    ops.push(op(''));
+    // Encabezado de sección con guiones como separador integrado
+    ops.push(op(sectionTitle(saliendo ? 'A ENTREGAR' : 'RECIBIDO', w), { bold: true }));
+
+    // Detalle de productos: altura estándar, sangrado limpio, sin saltos en blanco vacíos
+    (model.items || []).forEach(item => {
+      const itemText = (saliendo ? '[ ] ' : '') + item.cantidad + ' x ' + item.nombre;
+      wrapIndent(itemText, w - 2, 4).forEach(l => {
+        ops.push(op('  ' + l, { bold: true }));
+      });
+    });
+
     ops.push(op(divider(w)));
-    ops.push(op(saliendo ? 'Recibe:' : 'Entrega:'));
-    ops.push(op(''));
-    ops.push(op(''));
+
+    // Resumen de productos y unidades
+    const unidades = (model.items || []).reduce((n, i) => n + Number(i.cantidad || 0), 0);
+    const cantProd = (model.items || []).length + ((model.items || []).length === 1 ? ' producto' : ' productos');
+    const cantUnid = unidades + (unidades === 1 ? ' unidad' : ' unidades');
+    ops.push(op(padPair(cantProd, cantUnid, w), { bold: true }));
+
+    // Observaciones o notas de stock
+    const nota = notaDe(model);
+    if (nota) {
+      wrap('NOTA: ' + nota, w).forEach(l => ops.push(op(l)));
+    }
+
+    // Línea de firma compacta (1 sola línea)
     ops.push(op(divider(w)));
+    const etiquetaFirma = saliendo ? 'Firma entrega:' : 'Firma:';
+    const anchoGuiones = Math.max(8, w - etiquetaFirma.length - 1);
+    ops.push(op(etiquetaFirma + ' ' + '_'.repeat(anchoGuiones)));
+
+    // Aviso de no comprobante de pago
     ops.push(op('No es comprobante de pago', { align: 'center' }));
     ops.push(op(rule(w)));
 
@@ -937,7 +954,7 @@ window.ThermalPrinter = (function () {
     settings = settings || getSettings();
     const maxMm = settings.width >= 48 ? '78mm' : '58mm';
     const labels = copias === 2 ? ['COPIA 1 - ORIGINAL', 'COPIA 2 - DUPLICADO'] : null;
-    const ops1 = buildTraspasoOps(model, settings, labels ? labels[0] : 'COPIA 1');
+    const ops1 = buildTraspasoOps(model, settings, copias > 1 ? (labels ? labels[0] : 'COPIA 1') : null);
     const ops2 = copias >= 2 ? buildTraspasoOps(model, settings, labels ? labels[1] : 'COPIA 2') : null;
 
     const html1 = opsToHtml(ops1, settings);

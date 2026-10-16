@@ -2142,7 +2142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // La comanda se imprime en las dos direcciones: al mandar sirve de
             // entrega, y al recibir de acuse. En los dos casos alguien tiene
             // que poder demostrar que la mercancía cambió de manos.
-            imprimirTraspaso(data);
+            imprimirTraspaso(data, false, 2);
         } catch (err) {
             notify('Sin conexión con el servidor. Revisa el WiFi.', 'error');
         } finally {
@@ -2150,8 +2150,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // La comanda del traspaso / entrada / salida: imprime 2 copias del voucher térmico y gestiona la vista previa
-    function imprimirTraspaso(data, forzarModal = false, numCopias = 2) {
+    // La comanda del traspaso / entrada / salida: imprime copias optimizadas del voucher térmico y gestiona la vista previa
+    function imprimirTraspaso(data, forzarModal = false, numCopias = null) {
+        if (numCopias == null) {
+            // Para entradas o ajustes de inventario directo, 1 copia es suficiente para no gastar papel innecesario.
+            // Para traspasos entre dos barras distintas, 2 copias (una para cada barra).
+            numCopias = (data.tipo === 'ENTRADA' || data.tipo === 'AJUSTE') ? 1 : 2;
+        }
+
         const ahora = new Date();
         const dos = n => String(n).padStart(2, '0');
         let fecha = dos(ahora.getDate()) + '/' + dos(ahora.getMonth() + 1) + '/' + ahora.getFullYear();
@@ -2181,7 +2187,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const ajustes = ThermalPrinter.getSettings();
-        const ops = ThermalPrinter.buildTraspasoOps(modelo, ajustes, 'COPIA 1 - ORIGINAL');
+        const labelCopia1 = numCopias > 1 ? 'COPIA 1 - ORIGINAL' : null;
+        const ops = ThermalPrinter.buildTraspasoOps(modelo, ajustes, labelCopia1);
 
         traspasoParaImprimir = { ops: ops, modelo: modelo, copias: numCopias };
         const bodyTraspaso = document.getElementById('traspaso-body');
@@ -2194,6 +2201,12 @@ document.addEventListener('DOMContentLoaded', () => {
             bodyTraspaso.innerHTML = previewHtml;
         }
 
+        // Título dinámico del modal según tipo de operación
+        const modalTitle = document.querySelector('#traspaso-modal .print-title');
+        if (modalTitle) {
+            modalTitle.textContent = data.tipo === 'ENTRADA' ? '📥 Voucher de Ingreso de Stock' : (data.tipo === 'SALIDA' ? '📤 Voucher de Salida de Stock' : '📦 Comanda de Traspaso');
+        }
+
         // Envío del voucher a la impresora o modo digital
         if (ajustes.mode === 'none') {
             const tipoDesc = data.tipo === 'SALIDA' ? 'salida / traspaso' : 'entrada / ingreso';
@@ -2202,7 +2215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 ThermalPrinter.printTraspaso(modelo, ajustes, numCopias);
                 const tipoDesc = data.tipo === 'SALIDA' ? 'salida / traspaso' : 'entrada / ingreso';
-                notify(`Voucher de ${tipoDesc} #${data.id_traspaso} enviado a la impresora (${numCopias} copias).`, 'ok');
+                notify(`Voucher de ${tipoDesc} #${data.id_traspaso} enviado a la impresora (${numCopias} ${numCopias === 1 ? 'copia' : 'copias'}).`, 'ok');
             } catch (err) {
                 console.error('Error al imprimir voucher de traspaso:', err);
                 notify('No se pudo imprimir en RawBT: ' + (err.message || 'revisa la impresora'), 'error');
@@ -8182,7 +8195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('stock-action-modal').classList.add('hide');
                 renderAdminStockGrid();
 
-                // Imprimir voucher térmico automáticamente al registrar Entrada o Salida
+                // Imprimir voucher térmico automáticamente al registrar Entrada o Salida (1 sola copia por defecto para ahorrar papel)
                 imprimirTraspaso({
                     id_traspaso: data.id_movimiento || Date.now(),
                     tipo: currentStockModalType,
@@ -8197,7 +8210,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             cantidad: qty
                         }
                     ]
-                });
+                }, false, 1);
             } else {
                 notify(data.message || 'No se pudo registrar el movimiento.', 'error');
             }
@@ -8272,7 +8285,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 cantidad: m.cantidad
                             }
                         ]
-                    }, true);
+                    }, true, 1);
                 });
                 btnTd.appendChild(btnV);
                 tbody.appendChild(tr);
